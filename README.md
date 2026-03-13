@@ -1,0 +1,1 @@
+# ainon-synttari-hackathon
