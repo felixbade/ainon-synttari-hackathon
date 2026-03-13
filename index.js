@@ -1,8 +1,25 @@
 import "dotenv/config";
+import fs from "fs";
 import { Telegraf } from "telegraf";
 import { message } from "telegraf/filters";
 import { getClaudeReply } from "./claude.js";
 import { midSkeneAija, punkHoivaaja } from "./prompts.js";
+
+const HISTORY_FILE = "message_history.json";
+
+function loadHistory() {
+  try {
+    return JSON.parse(fs.readFileSync(HISTORY_FILE, "utf-8"));
+  } catch {
+    return [];
+  }
+}
+
+function saveMessage(sender, text) {
+  const history = loadHistory();
+  history.push({ sender, text, timestamp: new Date().toISOString() });
+  fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
+}
 
 const punkHoivaajaToken = process.env.PUNK_HOIVAAJA_TG_TOKEN;
 const midSkeneAijaToken = process.env.MID_SKENE_AIJA_TG_TOKEN;
@@ -57,10 +74,12 @@ function scheduleNextDaily() {
   const delay = next - now;
   setTimeout(async () => {
     const text = generateMessage([]);
+    saveMessage("punk-hoivaaja", text);
     await bot.telegram.sendMessage(groupChatId, text);
     if (pendingReply?.timeoutId) clearTimeout(pendingReply.timeoutId);
     pendingReply = {
       timeoutId: setTimeout(async () => {
+        saveMessage("punk-hoivaaja", "ei vastausta");
         await bot.telegram.sendMessage(groupChatId, "ei vastausta");
         pendingReply = null;
       }, 5 * 60 * 1000),
@@ -84,18 +103,22 @@ bot.on("message", async (ctx) => {
     clearTimeout(pendingReply.timeoutId);
     pendingReply = null;
     if (!ctx.message.from?.is_bot && ctx.message.text) {
+      saveMessage(ctx.message.from.username || "human", ctx.message.text);
       await ctx.sendChatAction("typing");
       const reply = await getClaudeReply(ctx.message.text, punkHoivaaja).catch(() => null);
       if (reply) {
+        saveMessage("punk-hoivaaja", reply);
         await ctx.reply(reply);
       }
     }
     return;
   }
   if (!ctx.message.from?.is_bot && ctx.message.text) {
+    saveMessage(ctx.message.from.username || "human", ctx.message.text);
     await ctx.sendChatAction("typing");
     const reply = await getClaudeReply(ctx.message.text, punkHoivaaja).catch(() => null);
     if (reply) {
+      saveMessage("punk-hoivaaja", reply);
       await ctx.reply(reply);
     }
   }
@@ -112,6 +135,7 @@ botSkeneAija.on("message", async (ctx) => {
   if (await relayPrivateMessage(ctx, botSkeneAija.telegram)) return;
   if (!groupChatId || String(ctx.chat.id) !== String(groupChatId)) return;
   if (!ctx.message.from?.is_bot && ctx.message.text) {
+    saveMessage(ctx.message.from.username || "human", ctx.message.text);
     const replyPromise = getClaudeReply(ctx.message.text, midSkeneAija);
     await new Promise((r) => setTimeout(r, 5000));
     const endAt = Date.now() + 5000;
@@ -123,6 +147,7 @@ botSkeneAija.on("message", async (ctx) => {
     }
     const reply = await replyPromise.catch(() => null);
     if (reply) {
+      saveMessage("mid-skene-aija", reply);
       await ctx.reply(reply);
     }
   }
