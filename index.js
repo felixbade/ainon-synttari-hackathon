@@ -138,7 +138,6 @@ botSkeneAija.on("message", async (ctx) => {
   if (await relayPrivateMessage(ctx, botSkeneAija.telegram)) return;
   if (!groupChatId || String(ctx.chat.id) !== String(groupChatId)) return;
   if (!ctx.message.from?.is_bot && ctx.message.text) {
-    saveMessage(ctx.message.from.username || "human", ctx.message.text);
     const replyPromise = getClaudeReply(ctx.message.text, skenePrompt, { history: loadHistory().slice(-20), botName: "mid-skene-aija" });
     await new Promise((r) => setTimeout(r, 5000));
     const endAt = Date.now() + 5000;
