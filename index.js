@@ -30,6 +30,7 @@ async function getClaudeReply(text) {
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
       max_tokens: 256,
+      system: "Vastaa aina suomeksi.",
       messages: [{ role: "user", content: text }],
     }),
   }).catch((err) => {
