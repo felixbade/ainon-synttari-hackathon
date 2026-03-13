@@ -112,27 +112,18 @@ botSkeneAija.on("message", async (ctx) => {
   if (await relayPrivateMessage(ctx, botSkeneAija.telegram)) return;
   if (!groupChatId || String(ctx.chat.id) !== String(groupChatId)) return;
   if (!ctx.message.from?.is_bot && ctx.message.text) {
-    const endAt = Date.now() + 20000;
-    let typing = true;
+    const replyPromise = getClaudeReply(ctx.message.text, midSkeneAija);
+    await new Promise((r) => setTimeout(r, 5000));
+    const endAt = Date.now() + 5000;
     while (Date.now() < endAt) {
-      if (typing) {
-        await ctx.sendChatAction("typing");
-      } else {
-        await botSkeneAija.telegram.callApi("sendChatAction", {
-          chat_id: ctx.chat.id,
-          action: null,
-        }).catch(() => {});
-      }
-      typing = !typing;
+      await ctx.sendChatAction("typing");
       const remaining = endAt - Date.now();
       if (remaining <= 0) break;
       await new Promise((r) => setTimeout(r, Math.min(remaining, 1000)));
     }
-    if (typing) {
-      await botSkeneAija.telegram.callApi("sendChatAction", {
-        chat_id: ctx.chat.id,
-        action: null,
-      }).catch(() => {});
+    const reply = await replyPromise.catch(() => null);
+    if (reply) {
+      await ctx.reply(reply);
     }
   }
 });
