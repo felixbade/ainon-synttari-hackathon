@@ -70,6 +70,8 @@ bot.on("message", async (ctx) => {
     return;
   }
   if (!ctx.message.from?.is_bot && ctx.message.text) {
+    await ctx.sendChatAction("typing");
+    await new Promise((r) => setTimeout(r, 10000));
     await ctx.reply(toTitleCase(ctx.message.text));
   }
 });
