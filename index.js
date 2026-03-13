@@ -7,10 +7,57 @@ const midSkeneAijaToken = process.env.MID_SKENE_AIJA_TG_TOKEN;
 const groupChatId = process.env.GROUP_CHAT_ID;
 const startHour = parseInt(process.env.MORNING_START_HOUR ?? "7", 10);
 const endHour = parseInt(process.env.MORNING_END_HOUR ?? "9", 10);
+const claudeApiKey = process.env.CLAUDE_API_KEY;
 
 if (!punkHoivaajaToken || !midSkeneAijaToken) {
   console.error("Missing PUNK_HOIVAAJA_TG_TOKEN or MID_SKENE_AIJA_TG_TOKEN in .env");
   process.exit(1);
+}
+
+async function getClaudeReply(text) {
+  if (!claudeApiKey) {
+    console.log("[claude] missing api key");
+    return null;
+  }
+  console.log("[claude] sending", { text });
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": claudeApiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 256,
+      messages: [{ role: "user", content: text }],
+    }),
+  }).catch((err) => {
+    console.log("[claude] fetch error", err);
+    return null;
+  });
+  if (!response) return null;
+  const status = response.status;
+  console.log("[claude] status", status);
+  if (!response.ok) {
+    const bodyText = await response.text().catch(() => "");
+    console.log("[claude] not ok body", bodyText);
+    return null;
+  }
+  const data = await response.json().catch((err) => {
+    console.log("[claude] json error", err);
+    return null;
+  });
+  if (!data) return null;
+  console.log("[claude] data", data);
+  const parts = Array.isArray(data.content) ? data.content : [];
+  const reply = parts
+    .filter((p) => p.type === "text")
+    .map((p) => p.text)
+    .join("\n")
+    .trim();
+  console.log("[claude] reply", reply);
+  return reply || null;
 }
 
 function generateMessage(conversationHistory) {
@@ -64,15 +111,21 @@ bot.on("message", async (ctx) => {
   if (pendingReply) {
     clearTimeout(pendingReply.timeoutId);
     pendingReply = null;
-    await ctx.sendChatAction("typing");
-    await new Promise((r) => setTimeout(r, 10000));
-    await ctx.reply("ok");
+    if (!ctx.message.from?.is_bot && ctx.message.text) {
+      await ctx.sendChatAction("typing");
+      const reply = await getClaudeReply(ctx.message.text).catch(() => null);
+      if (reply) {
+        await ctx.reply(reply);
+      }
+    }
     return;
   }
   if (!ctx.message.from?.is_bot && ctx.message.text) {
     await ctx.sendChatAction("typing");
-    await new Promise((r) => setTimeout(r, 10000));
-    await ctx.reply(toTitleCase(ctx.message.text));
+    const reply = await getClaudeReply(ctx.message.text).catch(() => null);
+    if (reply) {
+      await ctx.reply(reply);
+    }
   }
 });
 
