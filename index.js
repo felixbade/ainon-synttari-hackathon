@@ -163,3 +163,15 @@ if (!groupChatId) {
 }
 botSkeneAija.launch({ allowedUpdates: ["message"] });
 bot.launch({ allowedUpdates: ["message", "my_chat_member"] });
+
+if (groupChatId) {
+  const useSkene = Math.random() < 0.5;
+  const startupBot = useSkene ? botSkeneAija : bot;
+  const botName = useSkene ? "mid-skene-aija" : "punk-hoivaaja";
+  const prompt = useSkene ? skenePrompt : punkPrompt;
+  const wisdom = await getClaudeReply("Kerro yksi viisaus.", prompt, { history: loadHistory().slice(-20), botName });
+  if (wisdom) {
+    saveMessage(botName, wisdom);
+    startupBot.telegram.sendMessage(groupChatId, wisdom);
+  }
+}
