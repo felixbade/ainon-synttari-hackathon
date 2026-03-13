@@ -74,14 +74,11 @@ bot.on("my_chat_member", (ctx) => {
 
 if (groupChatId) scheduleNextDaily();
 console.log("Bot started. Listening for updates.");
-Promise.all([
-  botSkeneAija.launch(),
-  bot.launch({ allowedUpdates: ["message", "my_chat_member"] }),
-]).then(() => {
-  if (groupChatId) {
-    botSkeneAija.telegram.sendMessage(groupChatId, "mo");
-    bot.telegram.sendMessage(groupChatId, "moro");
-  } else {
-    console.log("Add the bot to a group to see the group id, then set GROUP_CHAT_ID in .env and restart.");
-  }
-});
+if (groupChatId) {
+  botSkeneAija.telegram.sendMessage(groupChatId, "mo").catch((err) => console.error("Startup mo failed:", err.message));
+  bot.telegram.sendMessage(groupChatId, "moro! :)").catch((err) => console.error("Startup moro failed:", err.message));
+} else {
+  console.log("Add the bot to a group to see the group id, then set GROUP_CHAT_ID in .env and restart.");
+}
+botSkeneAija.launch();
+bot.launch({ allowedUpdates: ["message", "my_chat_member"] });
