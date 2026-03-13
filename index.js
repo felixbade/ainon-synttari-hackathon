@@ -86,7 +86,28 @@ bot.on("my_chat_member", (ctx) => {
 botSkeneAija.on("message", async (ctx) => {
   if (!groupChatId || String(ctx.chat.id) !== String(groupChatId)) return;
   if (!ctx.message.from?.is_bot && ctx.message.text) {
-    await ctx.reply(ctx.message.text.toLowerCase());
+    const endAt = Date.now() + 20000;
+    let typing = true;
+    while (Date.now() < endAt) {
+      if (typing) {
+        await ctx.sendChatAction("typing");
+      } else {
+        await botSkeneAija.telegram.callApi("sendChatAction", {
+          chat_id: ctx.chat.id,
+          action: null,
+        }).catch(() => {});
+      }
+      typing = !typing;
+      const remaining = endAt - Date.now();
+      if (remaining <= 0) break;
+      await new Promise((r) => setTimeout(r, Math.min(remaining, 1000)));
+    }
+    if (typing) {
+      await botSkeneAija.telegram.callApi("sendChatAction", {
+        chat_id: ctx.chat.id,
+        action: null,
+      }).catch(() => {});
+    }
   }
 });
 
