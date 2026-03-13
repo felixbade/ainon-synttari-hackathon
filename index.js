@@ -2,13 +2,14 @@ import "dotenv/config";
 import { Telegraf } from "telegraf";
 import { message } from "telegraf/filters";
 
-const token = process.env.TELEGRAM_BOT_TOKEN;
+const punkHoivaajaToken = process.env.PUNK_HOIVAAJA_TG_TOKEN;
+const midSkeneAijaToken = process.env.MID_SKENE_AIJA_TG_TOKEN;
 const groupChatId = process.env.GROUP_CHAT_ID;
 const startHour = parseInt(process.env.MORNING_START_HOUR ?? "7", 10);
 const endHour = parseInt(process.env.MORNING_END_HOUR ?? "9", 10);
 
-if (!token) {
-  console.error("Missing TELEGRAM_BOT_TOKEN in .env");
+if (!punkHoivaajaToken || !midSkeneAijaToken) {
+  console.error("Missing PUNK_HOIVAAJA_TG_TOKEN or MID_SKENE_AIJA_TG_TOKEN in .env");
   process.exit(1);
 }
 
@@ -16,7 +17,8 @@ function generateMessage(conversationHistory) {
   return "huomenta";
 }
 
-const bot = new Telegraf(token);
+const botSkeneAija = new Telegraf(midSkeneAijaToken);
+const bot = new Telegraf(punkHoivaajaToken);
 
 let pendingReply = null;
 
@@ -72,8 +74,14 @@ bot.on("my_chat_member", (ctx) => {
 
 if (groupChatId) scheduleNextDaily();
 console.log("Bot started. Listening for updates.");
-bot.launch({
-  allowedUpdates: ["message", "my_chat_member"],
-}).then(() => {
-  if (!groupChatId) console.log("Add the bot to a group to see the group id, then set GROUP_CHAT_ID in .env and restart.");
+Promise.all([
+  botSkeneAija.launch(),
+  bot.launch({ allowedUpdates: ["message", "my_chat_member"] }),
+]).then(() => {
+  if (groupChatId) {
+    botSkeneAija.telegram.sendMessage(groupChatId, "mo");
+    bot.telegram.sendMessage(groupChatId, "moro");
+  } else {
+    console.log("Add the bot to a group to see the group id, then set GROUP_CHAT_ID in .env and restart.");
+  }
 });
