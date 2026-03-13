@@ -1,6 +1,27 @@
 const claudeApiKey = process.env.CLAUDE_API_KEY;
 
-export async function getClaudeReply(text, systemPrompt) {
+function buildMessages(history, botName, text, systemPrompt) {
+  const msgs = [{ role: "user", content: systemPrompt }, { role: "assistant", content: "Ymmärretty." }];
+  for (const entry of history) {
+    const role = entry.sender === botName ? "assistant" : "user";
+    if (msgs.length > 0 && msgs[msgs.length - 1].role === role) {
+      msgs[msgs.length - 1].content += "\n" + entry.text;
+    } else {
+      msgs.push({ role, content: entry.text });
+    }
+  }
+  if (msgs.length > 0 && msgs[msgs.length - 1].role === "user") {
+    msgs[msgs.length - 1].content += "\n" + text;
+  } else {
+    msgs.push({ role: "user", content: text });
+  }
+  if (msgs.length > 0 && msgs[0].role === "assistant") {
+    msgs.shift();
+  }
+  return msgs;
+}
+
+export async function getClaudeReply(text, systemPrompt, { history = [], botName = "" } = {}) {
   if (!claudeApiKey) {
     console.log("[claude] missing api key");
     return null;
@@ -14,18 +35,16 @@ export async function getClaudeReply(text, systemPrompt) {
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-6",
+      model: "claude-sonnet-4-20250514",
       max_tokens: 256,
-      system: systemPrompt,
-      messages: [{ role: "user", content: text }],
+      messages: buildMessages(history, botName, text, systemPrompt),
     }),
   }).catch((err) => {
     console.log("[claude] fetch error", err);
     return null;
   });
   if (!response) return null;
-  const status = response.status;
-  console.log("[claude] status", status);
+  console.log("[claude] status", response.status);
   if (!response.ok) {
     const bodyText = await response.text().catch(() => "");
     console.log("[claude] not ok body", bodyText);

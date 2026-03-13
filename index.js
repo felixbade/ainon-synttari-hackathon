@@ -3,7 +3,10 @@ import fs from "fs";
 import { Telegraf } from "telegraf";
 import { message } from "telegraf/filters";
 import { getClaudeReply } from "./claude.js";
-import { midSkeneAija, punkHoivaaja } from "./prompts.js";
+import { radikaaliPeili, midSkeneAija, punkHoivaaja } from "./prompts.js";
+
+const skenePrompt = radikaaliPeili + "\n\n" + midSkeneAija;
+const punkPrompt = radikaaliPeili + "\n\n" + punkHoivaaja;
 
 const HISTORY_FILE = "message_history.json";
 
@@ -105,7 +108,7 @@ bot.on("message", async (ctx) => {
     if (!ctx.message.from?.is_bot && ctx.message.text) {
       saveMessage(ctx.message.from.username || "human", ctx.message.text);
       await ctx.sendChatAction("typing");
-      const reply = await getClaudeReply(ctx.message.text, punkHoivaaja).catch(() => null);
+      const reply = await getClaudeReply(ctx.message.text, punkPrompt, { history: loadHistory().slice(-20), botName: "punk-hoivaaja" }).catch(() => null);
       if (reply) {
         saveMessage("punk-hoivaaja", reply);
         await ctx.reply(reply);
@@ -116,7 +119,7 @@ bot.on("message", async (ctx) => {
   if (!ctx.message.from?.is_bot && ctx.message.text) {
     saveMessage(ctx.message.from.username || "human", ctx.message.text);
     await ctx.sendChatAction("typing");
-    const reply = await getClaudeReply(ctx.message.text, punkHoivaaja).catch(() => null);
+    const reply = await getClaudeReply(ctx.message.text, punkPrompt, { history: loadHistory().slice(-20), botName: "punk-hoivaaja" }).catch(() => null);
     if (reply) {
       saveMessage("punk-hoivaaja", reply);
       await ctx.reply(reply);
@@ -136,7 +139,7 @@ botSkeneAija.on("message", async (ctx) => {
   if (!groupChatId || String(ctx.chat.id) !== String(groupChatId)) return;
   if (!ctx.message.from?.is_bot && ctx.message.text) {
     saveMessage(ctx.message.from.username || "human", ctx.message.text);
-    const replyPromise = getClaudeReply(ctx.message.text, midSkeneAija);
+    const replyPromise = getClaudeReply(ctx.message.text, skenePrompt, { history: loadHistory().slice(-20), botName: "mid-skene-aija" });
     await new Promise((r) => setTimeout(r, 5000));
     const endAt = Date.now() + 5000;
     while (Date.now() < endAt) {
