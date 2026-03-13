@@ -69,6 +69,22 @@ function toTitleCase(str) {
   return str.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
 }
 
+const allowedUsernames = (process.env.ALLOWED_USERNAMES ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+
+async function relayPrivateMessage(ctx, telegram) {
+  if (ctx.chat.type !== "private" || !groupChatId) return false;
+  const username = ctx.message.from?.username?.toLowerCase();
+  if (!allowedUsernames.includes(username)) return false;
+  if (ctx.message.text?.startsWith("/")) return false;
+  if (ctx.message.photo) {
+    const photo = ctx.message.photo[ctx.message.photo.length - 1];
+    await telegram.sendPhoto(groupChatId, photo.file_id, { caption: ctx.message.caption });
+  } else if (ctx.message.text) {
+    await telegram.sendMessage(groupChatId, ctx.message.text);
+  }
+  return true;
+}
+
 const botSkeneAija = new Telegraf(midSkeneAijaToken);
 const bot = new Telegraf(punkHoivaajaToken);
 
@@ -108,6 +124,7 @@ bot.on(message("new_chat_members"), (ctx) => {
 });
 
 bot.on("message", async (ctx) => {
+  if (await relayPrivateMessage(ctx, bot.telegram)) return;
   if (!groupChatId || String(ctx.chat.id) !== String(groupChatId)) return;
   if (pendingReply) {
     clearTimeout(pendingReply.timeoutId);
@@ -138,6 +155,7 @@ bot.on("my_chat_member", (ctx) => {
 });
 
 botSkeneAija.on("message", async (ctx) => {
+  if (await relayPrivateMessage(ctx, botSkeneAija.telegram)) return;
   if (!groupChatId || String(ctx.chat.id) !== String(groupChatId)) return;
   if (!ctx.message.from?.is_bot && ctx.message.text) {
     const endAt = Date.now() + 20000;
