@@ -17,6 +17,10 @@ function generateMessage(conversationHistory) {
   return "huomenta";
 }
 
+function toTitleCase(str) {
+  return str.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+}
+
 const botSkeneAija = new Telegraf(midSkeneAijaToken);
 const bot = new Telegraf(punkHoivaajaToken);
 
@@ -57,18 +61,30 @@ bot.on(message("new_chat_members"), (ctx) => {
 
 bot.on("message", async (ctx) => {
   if (!groupChatId || String(ctx.chat.id) !== String(groupChatId)) return;
-  if (!pendingReply) return;
-  clearTimeout(pendingReply.timeoutId);
-  pendingReply = null;
-  await ctx.sendChatAction("typing");
-  await new Promise((r) => setTimeout(r, 10000));
-  await ctx.reply("ok");
+  if (pendingReply) {
+    clearTimeout(pendingReply.timeoutId);
+    pendingReply = null;
+    await ctx.sendChatAction("typing");
+    await new Promise((r) => setTimeout(r, 10000));
+    await ctx.reply("ok");
+    return;
+  }
+  if (!ctx.message.from?.is_bot && ctx.message.text) {
+    await ctx.reply(toTitleCase(ctx.message.text));
+  }
 });
 
 bot.on("my_chat_member", (ctx) => {
   const status = ctx.myChatMember?.new_chat_member?.status;
   if (status === "member" || status === "administrator") {
     console.log("Bot has been added to a group. Group id:", ctx.chat.id);
+  }
+});
+
+botSkeneAija.on("message", async (ctx) => {
+  if (!groupChatId || String(ctx.chat.id) !== String(groupChatId)) return;
+  if (!ctx.message.from?.is_bot && ctx.message.text) {
+    await ctx.reply(ctx.message.text.toLowerCase());
   }
 });
 
@@ -80,5 +96,5 @@ if (groupChatId) {
 } else {
   console.log("Add the bot to a group to see the group id, then set GROUP_CHAT_ID in .env and restart.");
 }
-botSkeneAija.launch();
+botSkeneAija.launch({ allowedUpdates: ["message"] });
 bot.launch({ allowedUpdates: ["message", "my_chat_member"] });
