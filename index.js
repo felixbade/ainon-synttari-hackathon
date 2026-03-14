@@ -62,31 +62,33 @@ async function relayPrivateMessage(ctx, telegram) {
 const botSkeneAija = new Telegraf(midSkeneAijaToken);
 const bot = new Telegraf(punkHoivaajaToken);
 
-let pendingReply = null;
+let activeBotName = null;
 
 function scheduleNextDaily() {
   if (!groupChatId) return;
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const hour = startHour + Math.random() * (endHour - startHour);
-  const minute = Math.random() * 60;
-  let next = new Date(today.getTime() + hour * 3600000 + minute * 60000);
+  const helsinkiNow = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Helsinki" }));
+  const helsinkiOffset = helsinkiNow - now;
+  const todayHelsinki = new Date(helsinkiNow.getFullYear(), helsinkiNow.getMonth(), helsinkiNow.getDate());
+  const x = Math.random();
+  let next = new Date(todayHelsinki.getTime() - helsinkiOffset + (9 + x * 3) * 3600000);
   if (next <= now) {
     next = new Date(next.getTime() + 86400000);
   }
   const delay = next - now;
+  console.log(`Next morning message at ${next.toLocaleString("fi-FI")} (x=${x.toFixed(3)})`);
   setTimeout(async () => {
-    const text = generateMessage([]);
-    saveMessage("punk-hoivaaja", text);
-    await bot.telegram.sendMessage(groupChatId, text);
-    if (pendingReply?.timeoutId) clearTimeout(pendingReply.timeoutId);
-    pendingReply = {
-      timeoutId: setTimeout(async () => {
-        saveMessage("punk-hoivaaja", "ei vastausta");
-        await bot.telegram.sendMessage(groupChatId, "ei vastausta");
-        pendingReply = null;
-      }, 5 * 60 * 1000),
-    };
+    const useSkene = Math.random() >= x;
+    const chosenBot = useSkene ? botSkeneAija : bot;
+    const botName = useSkene ? "mid-skene-aija" : "punk-hoivaaja";
+    const prompt = useSkene ? skenePrompt : punkPrompt;
+    activeBotName = botName;
+    console.log(`Morning persona: ${botName}`);
+    const wisdom = await getClaudeReply("Kerro yksi viisaus.", prompt, { history: loadHistory().slice(-20), botName }).catch(() => null);
+    if (wisdom) {
+      saveMessage(botName, wisdom);
+      await chosenBot.telegram.sendMessage(groupChatId, wisdom);
+    }
     scheduleNextDaily();
   }, delay);
 }
@@ -102,24 +104,19 @@ bot.on(message("new_chat_members"), (ctx) => {
 bot.on("message", async (ctx) => {
   if (await relayPrivateMessage(ctx, bot.telegram)) return;
   if (!groupChatId || String(ctx.chat.id) !== String(groupChatId)) return;
-  if (pendingReply) {
-    clearTimeout(pendingReply.timeoutId);
-    pendingReply = null;
-    if (!ctx.message.from?.is_bot && ctx.message.text) {
-      saveMessage(ctx.message.from.username || "human", ctx.message.text);
-      await ctx.sendChatAction("typing");
-      const reply = await getClaudeReply(ctx.message.text, punkPrompt, { history: loadHistory().slice(-20), botName: "punk-hoivaaja" }).catch(() => null);
-      if (reply) {
-        saveMessage("punk-hoivaaja", reply);
-        await ctx.reply(reply);
-      }
-    }
-    return;
-  }
+  if (activeBotName !== "punk-hoivaaja") return;
   if (!ctx.message.from?.is_bot && ctx.message.text) {
     saveMessage(ctx.message.from.username || "human", ctx.message.text);
-    await ctx.sendChatAction("typing");
-    const reply = await getClaudeReply(ctx.message.text, punkPrompt, { history: loadHistory().slice(-20), botName: "punk-hoivaaja" }).catch(() => null);
+    const replyPromise = getClaudeReply(ctx.message.text, punkPrompt, { history: loadHistory().slice(-20), botName: "punk-hoivaaja" });
+    await new Promise((r) => setTimeout(r, 3000));
+    const endAt = Date.now() + 10000;
+    while (Date.now() < endAt) {
+      await ctx.sendChatAction("typing");
+      const remaining = endAt - Date.now();
+      if (remaining <= 0) break;
+      await new Promise((r) => setTimeout(r, Math.min(remaining, 4000)));
+    }
+    const reply = await replyPromise.catch(() => null);
     if (reply) {
       saveMessage("punk-hoivaaja", reply);
       await ctx.reply(reply);
@@ -137,15 +134,17 @@ bot.on("my_chat_member", (ctx) => {
 botSkeneAija.on("message", async (ctx) => {
   if (await relayPrivateMessage(ctx, botSkeneAija.telegram)) return;
   if (!groupChatId || String(ctx.chat.id) !== String(groupChatId)) return;
+  if (activeBotName !== "mid-skene-aija") return;
   if (!ctx.message.from?.is_bot && ctx.message.text) {
+    saveMessage(ctx.message.from.username || "human", ctx.message.text);
     const replyPromise = getClaudeReply(ctx.message.text, skenePrompt, { history: loadHistory().slice(-20), botName: "mid-skene-aija" });
-    await new Promise((r) => setTimeout(r, 5000));
-    const endAt = Date.now() + 5000;
+    await new Promise((r) => setTimeout(r, 3000));
+    const endAt = Date.now() + 10000;
     while (Date.now() < endAt) {
       await ctx.sendChatAction("typing");
       const remaining = endAt - Date.now();
       if (remaining <= 0) break;
-      await new Promise((r) => setTimeout(r, Math.min(remaining, 1000)));
+      await new Promise((r) => setTimeout(r, Math.min(remaining, 4000)));
     }
     const reply = await replyPromise.catch(() => null);
     if (reply) {
@@ -162,15 +161,3 @@ if (!groupChatId) {
 }
 botSkeneAija.launch({ allowedUpdates: ["message"] });
 bot.launch({ allowedUpdates: ["message", "my_chat_member"] });
-
-if (groupChatId) {
-  const useSkene = Math.random() < 0.5;
-  const startupBot = useSkene ? botSkeneAija : bot;
-  const botName = useSkene ? "mid-skene-aija" : "punk-hoivaaja";
-  const prompt = useSkene ? skenePrompt : punkPrompt;
-  const wisdom = await getClaudeReply("Kerro yksi viisaus.", prompt, { history: loadHistory().slice(-20), botName });
-  if (wisdom) {
-    saveMessage(botName, wisdom);
-    startupBot.telegram.sendMessage(groupChatId, wisdom);
-  }
-}
